@@ -1,4 +1,4 @@
-# CompressAndEncryptFiles version 2.1
+# Compress And Encrypt Files version 2.1
 
 ## Description
 This batch script compresses and encrypts files located in a specified directory and its subdirectories using a RAM disk. Each file is archived individually, allowing for either in-place replacement in the original directory or saving to a custom output directory. The script uses 7-Zip for compression and AES-256 encryption, ensuring that your files are securely stored.
