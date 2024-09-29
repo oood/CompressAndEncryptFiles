@@ -65,3 +65,6 @@ CompressAndEncryptFiles.bat --debug
 ## License
 This script is licensed under the MIT License.
 
+
+## Author
+Created by ChatGPT (OpenAI)
