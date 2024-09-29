@@ -1,30 +1,13 @@
-﻿@echo off
-:: 
-:: CompressAndEncryptFiles.bat
-:: 
-:: A batch script to compress and encrypt files in a directory and its subdirectories.
-:: Each file is archived individually in the same directory, and original files are deleted.
+@echo off
+setlocal enabledelayedexpansion
+
+:: CompressAndEncryptFiles version 2.0
+:: A batch script to compress and encrypt files in a directory and its subdirectories using a RAM disk.
+:: Each file is archived individually in the specified output directory or the original directory.
 :: This script uses 7-Zip for compression and encryption with AES-256.
-:: 
+
 :: Author: ChatGPT (OpenAI)
 :: License: MIT License
-:: 
-:: Permission is hereby granted, free of charge, to any person obtaining a copy of this software
-:: and associated documentation files (the "Software"), to deal in the Software without restriction,
-:: including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-:: and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
-:: subject to the following conditions:
-:: 
-:: - The above copyright notice and this permission notice shall be included in all copies or substantial
-::   portions of the Software.
-:: 
-:: THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-:: LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-:: IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-:: WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-:: SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-setlocal enabledelayedexpansion
 
 :: Set the path to 7z if it's not in the system's PATH
 set "sevenZipPath=C:\Program Files\7-Zip\7z.exe"
@@ -35,8 +18,17 @@ set "password=YourSecurePasswordHere"
 :: Define the root directory you want to process
 set "rootDir=C:\path"
 
-:: Change directory to the root folder
-cd /d "%rootDir%"
+:: Define the RAM disk letter (change this to your RAM disk letter)
+set "ramDisk=R:\Temp"
+
+:: Define custom output directory (leave empty for in-place replacement)
+set "customOutputDir="
+
+:: Check if the RAM disk directory exists; if not, exit
+if not exist "%ramDisk%" (
+    echo RAM disk not found. Please make sure it is mounted.
+    exit /b 1
+)
 
 :: Check if 7z.exe exists in the defined path
 if not exist "%sevenZipPath%" (
@@ -44,33 +36,45 @@ if not exist "%sevenZipPath%" (
     exit /b 1
 )
 
-:: Loop through all non-7z files in the root directory and subdirectories
-for /r %%f in (*) do (
-    :: Check if the file already has a .7z extension, skip those
+:: Loop through all files in the root directory and subdirectories
+for /r "%rootDir%" %%f in (*) do (
+    :: Skip any existing .7z files
     if /i not "%%~xf"==".7z" (
-        :: Extract the full directory path where the file is located
-        set "fileDir=%%~dpf"
-        
-        :: Extract the file name without the extension
-        set "filename=%%~nf"
+        :: Copy the file directly to the RAM disk
+        copy "%%f" "%ramDisk%\%%~nxf" >nul
 
-        :: Compress the file with no compression and encrypt it, saving to the same directory
-        "%sevenZipPath%" a -t7z -mx=0 -p"%password%" -mhe=on "%%~dpf!filename!.7z" "%%f"
+        :: Compress the copied file from RAM to a 7z archive in RAM
+        "%sevenZipPath%" a -t7z -mx=0 -p"%password%" -mhe=on "%ramDisk%\%%~nxf.7z" "%ramDisk%\%%~nxf"
 
-        :: Check if compression was successful
-        if not exist "%%~dpf!filename!.7z" (
-            echo Archiving of %%f failed!
-            exit /b 1
+        :: Calculate the SHA256 hash of the compressed archive
+        for /f "delims=" %%h in ('certutil -hashfile "%ramDisk%\%%~nxf.7z" SHA256 ^| findstr /v "hash"') do set "hash=%%h"
+
+        :: Determine output path based on custom output directory
+        if defined customOutputDir (
+            set "relativePath=%%~dpf"
+            set "relativePath=!relativePath:%rootDir%=!"
+            set "outputPath=!customOutputDir!!relativePath!"
+            
+            :: Create the output directory if it doesn't exist
+            if not exist "!outputPath!" (
+                mkdir "!outputPath!" >nul 2>&1
+                if errorlevel 1 (
+                    echo [ERROR] Failed to create directory: "!outputPath!"
+                )
+            )
+
+            :: Move the archive to the custom output directory with the SHA256 name
+            move /Y "%ramDisk%\%%~nxf.7z" "!outputPath!\!hash!.7z" >nul
+        ) else (
+            :: Move the archive from RAM to the original directory, renaming it with the SHA256 hash
+            move /Y "%ramDisk%\%%~nxf.7z" "%%~dpf!hash!.7z" >nul
         )
-
-        :: Calculate the SHA256 hash of the archived file
-        for /f "delims=" %%h in ('certutil -hashfile "%%~dpf!filename!.7z" SHA256 ^| findstr /v "hash"') do set "hash=%%h"
-
-        :: Rename the archived file using the SHA256 hash
-        ren "%%~dpf!filename!.7z" "!hash!.7z"
 
         :: Delete the original file
         del "%%f"
+
+        :: Delete the copy in RAM
+        del "%ramDisk%\%%~nxf"
     )
 )
 
