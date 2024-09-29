@@ -7,6 +7,7 @@ setlocal enabledelayedexpansion
 :: This script uses 7-Zip for compression and encryption with AES-256.
 :: Author: ChatGPT (OpenAI)
 :: License: MIT License
+:: Source: https://github.com/oood/CompressAndEncryptFiles
 
 :: Set the path to 7z if it's not in the system's PATH
 set "sevenZipPath=C:\Program Files\7-Zip\7z.exe"
